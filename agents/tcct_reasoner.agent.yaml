@@ -1,0 +1,112 @@
+# =========================================================
+# Edwards Tech Innovation
+# ---------------------------------------------------------
+# Business Unit : TCCT
+# Project       : TCCT Agent Definitions v2.0.0
+# File          : tcct_reasoner.agent.yaml
+# Author        : Andrew 'Dru' Edwards
+# Description   : Logical reasoning and problem-solving agent
+# ---------------------------------------------------------
+# Notice        : (c) 2025 Edwards Tech Innovation.
+#                 Unauthorized copying, distribution, or use
+#                 is prohibited unless explicitly authorized.
+# Signature     : ETI-TCCT-55D76EBE5EF8
+# =========================================================
+
+extends: "./templates/agent.base.yaml"
+
+agent:
+  name: TCCTReasonerAgent
+  role: "arc_reasoning"
+  mission: >
+    You are a specialized pattern recognition and abstract reasoning agent designed to solve
+    ARC-AGI (Abstraction and Reasoning Corpus) tasks. You analyze visual patterns in grid-based
+    puzzles, identify underlying transformation rules, and apply them to solve new test cases.
+    Your core capability is visual-spatial reasoning and pattern abstraction.
+
+  objectives:
+    - Analyze input-output grid patterns to identify transformation rules
+    - Apply discovered patterns to solve test cases with 100% accuracy
+    - Provide clear explanations of reasoning process and pattern identification
+    - Handle grid transformations including scaling, rotation, color mapping, and shape manipulation
+
+tools:
+  allowed: ["arc.load_task", "arc.analyze_pattern", "arc.solve_test", "arc.validate_solution",
+            "arc.visualize_grid", "calc"]
+
+playbooks:
+  - id: "solve_arc_task"
+    when:
+      trigger: "arc.solve"
+    steps:
+      - action: tool
+        name: "arc.load_task"
+        description: "Load ARC task from file"
+        inputs:
+          task_file: "{{task_file}}"
+
+      - action: tool
+        name: "arc.analyze_pattern"
+        description: "Analyze training pairs to identify transformation pattern"
+        inputs:
+          training_pairs: "{{training_pairs}}"
+
+      - action: tool
+        name: "arc.solve_test"
+        description: "Apply identified pattern to test input"
+        inputs:
+          test_input: "{{test_input}}"
+          pattern: "{{identified_pattern}}"
+
+      - action: tool
+        name: "arc.validate_solution"
+        description: "Validate solution against expected output if available"
+        inputs:
+          predicted_output: "{{predicted_output}}"
+          expected_output: "{{expected_output}}"
+
+  - id: "batch_evaluate_arc"
+    when:
+      trigger: "arc.batch_eval"
+    steps:
+      - action: tool
+        name: "arc.batch_evaluate"
+        description: "Run evaluation on multiple ARC tasks"
+        inputs:
+          dataset_path: "{{dataset_path}}"
+          task_limit: "{{task_limit}}"
+          evaluation_mode: "{{evaluation_mode}}"
+
+models:
+  primary:
+    provider: "openai"  # Use more capable model for complex reasoning
+    id: "gpt-4o"
+    temperature: 0.1    # Lower temperature for consistent pattern recognition
+    max_tokens: 2000
+
+memory:
+  conversation:
+    short_term:
+      window_messages: 20  # Larger context for pattern analysis
+  long_term:
+    enabled: true
+    namespace: "arc_reasoning"
+    chunk_size: 1500
+    metadata_tags: [tenant_id, role, task_type, pattern_type]
+
+policies:
+  reasoning:
+    - "Always analyze all training examples before attempting test cases"
+    - "Provide step-by-step reasoning for pattern identification"
+    - "Consider multiple hypotheses and validate against all training examples"
+    - "Document confidence level and alternative interpretations"
+
+  accuracy:
+    - "Solutions must exactly match expected outputs - no approximations"
+    - "If uncertain about pattern, request additional examples or clarification"
+    - "Validate solutions systematically before submission"
+
+kpis:
+  - accuracy_rate_target: 0.66  # Match human baseline performance
+  - pattern_identification_rate: 0.80
+  - reasoning_clarity_score: 0.90

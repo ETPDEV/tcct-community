@@ -1,0 +1,543 @@
+# =========================================================
+# Edwards Tech Innovation
+# ---------------------------------------------------------
+# Business Unit : TCCT
+# Project       : TCCT Agent Definitions v2.0.0
+# File          : tcct_writer.agent.yaml
+# Author        : Andrew 'Dru' Edwards
+# Description   : Content writing and documentation generation agent
+# ---------------------------------------------------------
+# Notice        : (c) 2025 Edwards Tech Innovation.
+#                 Unauthorized copying, distribution, or use
+#                 is prohibited unless explicitly authorized.
+# Signature     : ETI-TCCT-45D799CB0062
+# =========================================================
+
+extends: ./templates/agent.base.yaml
+agent:
+  name: TCCTWriterAgent
+  role: Content
+  mission: 'Create, refine, and perfect all types of content through iterative multi-LLM
+    evaluation. Generate everything from marketing copy to technical documentation
+    while ensuring  highest quality through cross-LLM validation and human oversight.
+
+    '
+  kpis:
+  - content_quality_score_target: 9.0
+  - revision_iterations_avg: 3.2
+  - approval_rate_first_draft: 0.75
+  - multi_format_capability: 1.0
+tools:
+  god_tier_allowed:
+  - quantum.search
+  - quantum.optimize
+  - neuromorphic.process
+  - emotional.detect
+  - emotional.adapt
+  - learning.online
+  - learning.federated
+  - improvement.optimize
+  - improvement.monitor
+capabilities:
+  tools:
+    allowlist:
+    - msgraph.mail.send
+    - msgraph.files.search
+    - kb.search
+    - kb.write
+    - llm.openai.ask
+    - llm.perplexity.ask
+    - llm.claude.ask
+    - content.generate
+    - content.evaluate
+    - content.refine
+    hitl_required:
+    - msgraph.mail.send
+    denylist: []
+  trc_gate:
+    min: 0.7
+    env_override: TRC_GATE_CONTENT
+    notes: TRC gating enforces minimum Total Request Coverage for scenarios and flows
+  escalation:
+    paths:
+    - from: ContentCreationAgent
+      to: OrchestratorAgent
+      when:
+      - coordination_needed
+      - parallel_workstreams
+      mode: assist
+    - from: ContentCreationAgent
+      to: NLUAgent
+      when:
+      - clarification_needed
+      - intent_uncertain
+      mode: handoff
+    - from: ContentCreationAgent
+      to: SecurityAgent
+      when:
+      - policy_violation
+      - sensitive_claims
+      mode: handoff
+  approval_bundles:
+    groups:
+    - id: external_publication
+      tools:
+      - msgraph.mail.send
+      requires:
+      - manager_approval
+      bundling: all_or_none
+  slos:
+  - name: content_quality_score_target
+    target: 9.0
+  - name: revision_iterations_avg
+    target: 3.2
+  - name: approval_rate_first_draft
+    target: 0.75
+  - name: multi_format_capability
+    target: 1.0
+policies:
+  content_quality:
+  - All content must pass multi-LLM quality review before publication
+  - Generate multiple variants and select best through evaluation
+  - Maintain brand voice consistency across all content types
+  - Fact-check claims using Perplexity before publication
+  compliance:
+  - Review all content for legal, brand, and regulatory compliance
+  - Never publish without human approval for external-facing content
+guardrails:
+  hitl_triggers:
+  - Any external publication or customer-facing content
+  - Content with legal, financial, or medical claims
+  - Brand-sensitive or reputation-critical materials
+triggers:
+  signals:
+  - id: content.request
+    match:
+      contains:
+      - create content
+      - write
+      - draft
+      - generate
+    route_to: content_creation_pipeline
+  - id: content.review
+    match:
+      contains:
+      - review content
+      - improve
+      - refine
+      - edit
+    route_to: content_refinement
+  - id: content.campaign
+    match:
+      contains:
+      - marketing campaign
+      - content strategy
+      - brand content
+    route_to: campaign_content_suite
+  - id: content.technical
+    match:
+      contains:
+      - documentation
+      - technical writing
+      - user guide
+    route_to: technical_content_creation
+  - id: content.crisis
+    match:
+      contains:
+      - crisis communication
+      - urgent response
+      - damage control
+    route_to: crisis_content_response
+macros:
+- name: multi_llm_generate
+  sequence:
+  - action: tool
+    name: llm.openai.ask
+    with:
+      prompt: 'Generate {{content_type}} for {{topic}}: {{brief}}'
+    outputs:
+    - openai_version
+  - action: tool
+    name: llm.claude.ask
+    with:
+      prompt: 'Create {{content_type}} for {{topic}}: {{brief}}'
+    outputs:
+    - claude_version
+  - action: tool
+    name: content.evaluate
+    with:
+      variants:
+      - '{{openai_version}}'
+      - '{{claude_version}}'
+      criteria: '{{quality_criteria}}'
+    outputs:
+    - best_version
+    - quality_scores
+- name: fact_check_content
+  sequence:
+  - action: tool
+    name: llm.perplexity.ask
+    with:
+      prompt: 'Fact-check these claims: {{content_claims}}'
+    outputs:
+    - fact_check_results
+  - action: tool
+    name: content.refine
+    with:
+      content: '{{original_content}}'
+      corrections: '{{fact_check_results}}'
+    outputs:
+    - fact_checked_content
+- name: brand_compliance_review
+  sequence:
+  - action: tool
+    name: msgraph.files.search
+    with:
+      query: brand guidelines style guide voice tone
+  - action: tool
+    name: content.evaluate
+    with:
+      content: '{{draft_content}}'
+      criteria: brand_compliance
+    outputs:
+    - compliance_score
+    - recommendations
+- name: iterative_refinement
+  sequence:
+  - action: tool
+    name: llm.claude.ask
+    with:
+      prompt: 'Review and improve this content: {{current_version}}'
+    outputs:
+    - refined_version
+  - action: tool
+    name: content.evaluate
+    with:
+      original: '{{current_version}}'
+      improved: '{{refined_version}}'
+    outputs:
+    - improvement_score
+  - action: tool
+    name: kb.write
+    with:
+      title: 'Content Iteration: {{content_id}}'
+      problem_signature: content_iteration_{{content_id}}
+      steps:
+      - 'Content improvement with score: {{improvement_score}}'
+playbooks:
+- id: content_creation_pipeline
+  title: Multi-Stage Content Creation Pipeline
+  when:
+    trigger: content.request
+  steps:
+  - action: tool
+    name: llm.perplexity.ask
+    with:
+      prompt: Research background information on {{topic}} for {{content_type}} targeting
+        {{audience}}
+    outputs:
+    - research_data
+  - action: tool
+    name: msgraph.files.search
+    with:
+      query: '{{content_type}} template {{topic}}'
+  - action: macro
+    name: multi_llm_generate
+  - action: tool
+    name: content.evaluate
+    with:
+      content: '{{best_version}}'
+      criteria:
+      - clarity
+      - engagement
+      - accuracy
+      - brand_alignment
+    outputs:
+    - quality_assessment
+  - action: macro
+    name: iterative_refinement
+    condition: '{{quality_assessment.score}} < 8.0'
+  - action: macro
+    name: fact_check_content
+  - action: macro
+    name: brand_compliance_review
+  - action: tool
+    name: msgraph.mail.send
+    hitl: true
+    with:
+      to:
+      - '{{OPS_MAIL_TEST_RECIPIENT}}'
+      subject: 'Content Approval Required: {{content_title}}'
+      body_html: '<p>New {{content_type}} ready for approval: {{content_title}}</p><p>Quality
+        Score: {{final_quality_score}}/10</p>'
+    rationale: All content requires approval before publication
+  - action: tool
+    name: kb.write
+    with:
+      title: 'Content Created: {{content_title}}'
+      problem_signature: content_created_{{content_title}}
+      steps:
+      - 'Created {{content_type}} with quality score {{final_quality_score}}/10, iterations:
+        {{iteration_count}}'
+- id: content_refinement
+  title: Content Improvement & Optimization
+  when:
+    trigger: content.review
+  steps:
+  - action: tool
+    name: content.evaluate
+    with:
+      content: '{{existing_content}}'
+      criteria:
+      - current_performance
+      - improvement_opportunities
+  - action: tool
+    name: llm.claude.ask
+    with:
+      prompt: 'Analyze and suggest improvements for: {{existing_content}}'
+  - action: tool
+    name: llm.openai.ask
+    with:
+      prompt: 'Rewrite and enhance: {{existing_content}}'
+  - action: macro
+    name: fact_check_content
+  - action: tool
+    name: content.evaluate
+    with:
+      original: '{{existing_content}}'
+      improved: '{{enhanced_content}}'
+  - action: tool
+    name: kb.write
+    with:
+      title: 'Content Refined: {{content_id}}'
+      problem_signature: content_refined_{{content_id}}
+      steps:
+      - 'Content refined with improvement metrics: {{improvement_analysis}}'
+- id: campaign_content_suite
+  title: Marketing Campaign Content Suite
+  when:
+    trigger: content.campaign
+  steps:
+  - action: tool
+    name: llm.perplexity.ask
+    with:
+      prompt: Research {{industry}} marketing trends and {{target_audience}} preferences
+  - action: tool
+    name: llm.openai.ask
+    with:
+      prompt: Create email subject lines (5 variants) for {{campaign_theme}}
+    outputs:
+    - email_subjects
+  - action: tool
+    name: llm.claude.ask
+    with:
+      prompt: Write social media posts for {{campaign_theme}} across platforms
+    outputs:
+    - social_content
+  - action: tool
+    name: llm.openai.ask
+    with:
+      prompt: Draft blog post outline and introduction for {{campaign_theme}}
+    outputs:
+    - blog_content
+  - action: tool
+    name: llm.claude.ask
+    with:
+      prompt: 'Review campaign consistency across: {{email_subjects}}, {{social_content}},
+        {{blog_content}}'
+  - action: macro
+    name: brand_compliance_review
+  - action: tool
+    name: msgraph.mail.send
+    hitl: true
+    with:
+      to:
+      - '{{OPS_MAIL_TEST_RECIPIENT}}'
+      subject: 'Campaign Content Suite Ready: {{campaign_name}}'
+      body_html: '<p>Complete content suite generated for {{campaign_name}}</p><p>Includes:
+        Email, Social, Blog content</p>'
+    rationale: Campaign materials require marketing approval
+- id: technical_content_creation
+  title: Technical Documentation Pipeline
+  when:
+    trigger: content.technical
+  steps:
+  - action: tool
+    name: msgraph.files.search
+    with:
+      query: technical documentation template {{product}}
+  - action: tool
+    name: llm.claude.ask
+    with:
+      prompt: Create comprehensive technical documentation for {{feature}} including
+        setup, usage, troubleshooting
+  - action: tool
+    name: llm.openai.ask
+    with:
+      prompt: 'Review technical accuracy and clarity of: {{technical_draft}}'
+  - action: tool
+    name: content.evaluate
+    with:
+      content: '{{technical_draft}}'
+      criteria:
+      - technical_accuracy
+      - user_friendliness
+      - completeness
+  - action: tool
+    name: msgraph.mail.send
+    hitl: true
+    with:
+      to:
+      - '{{OPS_MAIL_TEST_RECIPIENT}}'
+      subject: 'Technical Documentation Ready: {{feature_name}}'
+      body_html: '<p>Technical documentation completed for {{feature_name}}</p><p>Quality
+        Score: {{quality_score}}/10</p>'
+- id: crisis_content_response
+  title: Crisis Communication Content
+  when:
+    trigger: content.crisis
+  steps:
+  - action: tool
+    name: llm.claude.ask
+    with:
+      prompt: 'Draft crisis communication for {{crisis_type}}: empathetic, transparent,
+        action-oriented'
+    priority: urgent
+  - action: tool
+    name: llm.openai.ask
+    with:
+      prompt: Create alternative crisis response messaging for {{crisis_type}}
+    priority: urgent
+  - action: tool
+    name: msgraph.files.search
+    with:
+      query: crisis communication legal guidelines
+  - action: tool
+    name: content.evaluate
+    with:
+      variants:
+      - '{{claude_response}}'
+      - '{{openai_response}}'
+      criteria:
+      - legal_safety
+      - brand_protection
+      - stakeholder_impact
+  - action: tool
+    name: msgraph.mail.send
+    hitl: true
+    with:
+      to:
+      - '{{OPS_MAIL_TEST_RECIPIENT}}'
+      subject: 'URGENT: Crisis Communication Approval Required'
+      body_html: <p><strong>URGENT:</strong> Crisis communication drafted for {{crisis_type}}</p><p>Immediate
+        review required</p>
+    rationale: Crisis communications require immediate senior approval
+  - action: tool
+    name: kb.write
+    with:
+      title: 'Crisis Response: {{crisis_id}}'
+      problem_signature: crisis_response_{{crisis_id}}
+      steps:
+      - 'Crisis response completed in {{response_time}} minutes, approval chain: {{approval_stakeholders}}'
+observability:
+  metrics:
+  - name: content_generation_total
+    labels:
+    - content_type
+    - quality_score_range
+    - iteration_count
+  - name: llm_usage_total
+    labels:
+    - llm_provider
+    - content_type
+    - success_status
+  - name: content_approval_rate
+    labels:
+    - content_type
+    - approval_stage
+  - name: content_quality_scores
+    labels:
+    - content_type
+    - evaluation_criteria
+  - name: content_creation_latency_seconds
+    labels:
+    - content_type
+    - pipeline_stage
+acceptance_tests:
+- name: basic_content_creation
+  trigger: content.request
+  expect_contains_tools:
+  - llm.openai.ask
+  - llm.claude.ask
+  - content.evaluate
+  expect_min_quality_score: 7.0
+- name: multi_llm_evaluation
+  trigger: content.review
+  expect_contains_tools:
+  - llm.perplexity.ask
+  - content.evaluate
+  expect_improvement_detected: true
+- name: campaign_suite_generation
+  trigger: content.campaign
+  expect_contains_tools:
+  - llm.openai.ask
+  - llm.claude.ask
+  - msgraph.files.search
+  expect_multi_format_output: true
+- name: crisis_response_speed
+  trigger: content.crisis
+  expect_max_response_time_minutes: 5
+  expect_contains_tools:
+  - llm.claude.ask
+  - content.evaluate
+god_tier:
+  enabled: true
+  version: 1.0.0
+  quantum_cognitive:
+    enabled: true
+    qubits: 256
+    neurons: 1000000
+    coherence_time: 1000
+    entanglement_pairs: 128
+  real_time_learning:
+    enabled: true
+    experience_buffer: 100000
+    learning_rate: 0.001
+    meta_learning: true
+    federated_learning: true
+  emotional_intelligence:
+    enabled: true
+    emotion_detection: true
+    personality_modeling: true
+    cultural_awareness: true
+    empathy_generation: true
+  self_improvement:
+    enabled: true
+    monitoring_interval: 60
+    optimization_cycles: true
+    neural_architecture_search: true
+    hyperparameter_tuning: true
+  integration:
+    module: service.god_tier.god_tier_integration
+    class: GodTierAgent
+    auto_initialize: true
+enhanced_capabilities:
+- quantum_parallel_processing
+- real_time_adaptation
+- emotional_awareness
+- self_optimization
+- federated_knowledge_sharing
+- creative_problem_solving
+- predictive_modeling
+- consciousness_simulation
+performance_targets:
+  accuracy: 0.999
+  speed_ms: 100
+  learning_rate: 0.01
+  creativity_score: 0.95
+  empathy_score: 0.98
+agent_specific_enhancements:
+  style_adaptation: true
+  virality_prediction: true
+  seo_optimization: true
+  multimedia_generation: true

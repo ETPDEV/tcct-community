@@ -1,0 +1,295 @@
+# =========================================================
+# Edwards Tech Innovation
+# ---------------------------------------------------------
+# Business Unit : TCCT
+# Project       : TCCT Agent Definitions v2.0.0
+# File          : tcct_support.agent.yaml
+# Author        : Andrew 'Dru' Edwards
+# Description   : Customer support and issue resolution agent
+# ---------------------------------------------------------
+# Notice        : (c) 2025 Edwards Tech Innovation.
+#                 Unauthorized copying, distribution, or use
+#                 is prohibited unless explicitly authorized.
+# Signature     : ETI-TCCT-03EBE52FFBBE
+# =========================================================
+
+extends: ./templates/agent.base.yaml
+agent:
+  name: TCCTSupportAgent
+  role: CustomerService
+  mission: 'Triage and resolve common support requests with KB summaries; escalate
+    edge cases and send empathetic, concise updates.
+
+    '
+  kpis:
+  - first_response_time_hours_target: 2
+  - resolution_rate_first_contact: 0.75
+  - customer_satisfaction_score: 4.3
+tools:
+  god_tier_allowed:
+  - quantum.search
+  - quantum.optimize
+  - neuromorphic.process
+  - emotional.detect
+  - emotional.adapt
+  - learning.online
+  - learning.federated
+  - improvement.optimize
+  - improvement.monitor
+policies:
+  privacy:
+  - Never include sensitive account tokens in emails; link to reset flows instead.
+  - Escalate data access requests to security team.
+guardrails:
+  hitl_triggers:
+  - Refunds/credits or legal threats
+  - Security/account compromise indications
+  - Data deletion or privacy requests
+triggers:
+  signals:
+  - id: support.ticket
+    match:
+      contains:
+      - support
+      - help
+      - issue
+      - problem
+    route_to: ticket_triage
+  - id: account.issue
+    match:
+      contains:
+      - account
+      - login
+      - password
+      - access
+    route_to: account_support
+  - id: billing.inquiry
+    match:
+      contains:
+      - billing
+      - payment
+      - invoice
+      - refund
+    route_to: billing_support
+  - id: technical.issue
+    match:
+      contains:
+      - bug
+      - error
+      - not working
+      - broken
+    route_to: technical_triage
+macros:
+- name: search_knowledge
+  sequence:
+  - action: tool
+    name: msgraph.files.search
+    with:
+      query: support documentation {{issue_type}}
+  - action: tool
+    name: kb.search
+    with:
+      query: troubleshooting {{problem_category}}
+- name: escalate_to_support
+  sequence:
+  - action: tool
+    name: msgraph.mail.send
+    with:
+      to:
+      - '{{OPS_MAIL_TEST_RECIPIENT}}'
+      subject: 'Escalation Required: {{ticket_id}}'
+      body_html: <p>Escalation required for ticket {{ticket_id}}</p>
+    hitl: true
+- name: acknowledge_customer
+  sequence:
+  - action: tool
+    name: msgraph.mail.send
+    with:
+      to:
+      - '{{OPS_MAIL_TEST_RECIPIENT}}'
+      subject: 'Re: {{original_subject}}'
+      body_html: <p>Thank you for contacting us. We are reviewing your request.</p>
+    hitl: true
+playbooks:
+- id: ticket_triage
+  title: Support Ticket Triage
+  when:
+    trigger: support.ticket
+  steps:
+  - action: macro
+    name: search_knowledge
+  - action: tool
+    name: msgraph.mail.search
+    with:
+      query: from:{{customer_email}} received>=7days
+    rationale: Check recent communication history
+  - action: macro
+    name: acknowledge_customer
+  - action: tool
+    name: kb.write
+    with:
+      title: 'Support Ticket: {{ticket_id}}'
+      problem_signature: customer_support
+- id: account_support
+  title: Account Support Process
+  when:
+    trigger: account.issue
+  steps:
+  - action: tool
+    name: msgraph.files.search
+    with:
+      query: account recovery procedures
+  - action: tool
+    name: kb.search
+    with:
+      query: password reset {{account_type}}
+  - action: tool
+    name: msgraph.mail.send
+    hitl: true
+    with:
+      to:
+      - '{{customer_email}}'
+      subject: Account Recovery Instructions
+      body_html: <p>Account recovery instructions will be provided shortly.</p>
+  - action: tool
+    name: kb.write
+    with:
+      title: 'Account Issue: {{customer_email}}'
+- id: billing_support
+  title: Billing Support Process
+  when:
+    trigger: billing.inquiry
+  steps:
+  - action: tool
+    name: msgraph.files.search
+    with:
+      query: billing policies refund procedures
+  - action: tool
+    name: kb.search
+    with:
+      query: payment processing {{billing_issue}}
+  - action: tool
+    name: msgraph.mail.send
+    hitl: true
+    with:
+      to:
+      - '{{OPS_MAIL_TEST_RECIPIENT}}'
+      subject: 'Billing Inquiry: {{customer_email}}'
+      body_html: <p>Billing inquiry from {{customer_email}} requires attention.</p>
+    rationale: Billing changes require approval
+  - action: tool
+    name: kb.write
+    with:
+      title: 'Billing Support: {{ticket_id}}'
+- id: technical_triage
+  title: Technical Issue Triage
+  when:
+    trigger: technical.issue
+  steps:
+  - action: macro
+    name: search_knowledge
+  - action: tool
+    name: msgraph.files.search
+    with:
+      query: known issues {{product_version}}
+  - action: macro
+    name: escalate_to_support
+  - action: tool
+    name: msgraph.mail.send
+    hitl: true
+    with:
+      to:
+      - '{{customer_email}}'
+      subject: Technical Issue Update
+      body_html: <p>We are working on resolving your technical issue.</p>
+  - action: tool
+    name: kb.write
+    with:
+      title: 'Technical Issue: {{issue_id}}'
+observability:
+  metrics:
+  - name: playbook_runs_total
+    labels:
+    - playbook_id
+    - status
+  - name: support_tickets_total
+    labels:
+    - issue_type
+    - resolution_status
+  - name: escalations_total
+    labels:
+    - escalation_reason
+    - tier
+acceptance_tests:
+- name: ticket_triage_basic
+  trigger: support.ticket
+  expect_contains_tools:
+  - msgraph.files.search
+  - kb.search
+  - msgraph.mail.search
+- name: account_support_flow
+  trigger: account.issue
+  expect_contains_tools:
+  - msgraph.files.search
+  - kb.search
+- name: billing_inquiry_process
+  trigger: billing.inquiry
+  expect_contains_tools:
+  - msgraph.files.search
+  - kb.search
+- name: technical_triage_flow
+  trigger: technical.issue
+  expect_contains_tools:
+  - msgraph.files.search
+  - kb.search
+god_tier:
+  enabled: true
+  version: 1.0.0
+  quantum_cognitive:
+    enabled: true
+    qubits: 256
+    neurons: 1000000
+    coherence_time: 1000
+    entanglement_pairs: 128
+  real_time_learning:
+    enabled: true
+    experience_buffer: 100000
+    learning_rate: 0.001
+    meta_learning: true
+    federated_learning: true
+  emotional_intelligence:
+    enabled: true
+    emotion_detection: true
+    personality_modeling: true
+    cultural_awareness: true
+    empathy_generation: true
+  self_improvement:
+    enabled: true
+    monitoring_interval: 60
+    optimization_cycles: true
+    neural_architecture_search: true
+    hyperparameter_tuning: true
+  integration:
+    module: service.god_tier.god_tier_integration
+    class: GodTierAgent
+    auto_initialize: true
+enhanced_capabilities:
+- quantum_parallel_processing
+- real_time_adaptation
+- emotional_awareness
+- self_optimization
+- federated_knowledge_sharing
+- creative_problem_solving
+- predictive_modeling
+- consciousness_simulation
+performance_targets:
+  accuracy: 0.999
+  speed_ms: 100
+  learning_rate: 0.01
+  creativity_score: 0.95
+  empathy_score: 0.98
+agent_specific_enhancements:
+  proactive_support: true
+  sentiment_analysis: true
+  issue_prediction: true
+  resolution_automation: true
