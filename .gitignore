@@ -1,0 +1,94 @@
+# =========================================================
+# Edwards Tech Innovation - TCCT
+# ---------------------------------------------------------
+# .gitignore - Exclude sensitive files from version control
+# =========================================================
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+credentials.json
+secrets.json
+config.local.json
+
+# API keys (never commit these)
+*_api_key*
+*_secret*
+*_token*
+
+# Signature registry (contains file hashes)
+.signature_registry.json
+
+# Local development
+*.log
+*.pid
+*.sock
+.alice-agents.log
+nohup.out
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+venv/
+.venv/
+ENV/
+
+# Model files (too large for git)
+*.gguf
+*.bin
+*.safetensors
+models/
+
+# Termux-specific
+.termux/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Test artifacts
+stress_test_results.json
+*.tmp
+.cache/
+
+# Memory/session data (user-specific)
+memory/
+sessions/
+context/
+knowledge/
+
+# Build artifacts
+*.o
+*.a
+llama.cpp/
+
+# Package files
+*.zip
+*.tar.gz
+*.tgz

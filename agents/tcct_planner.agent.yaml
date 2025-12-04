@@ -1,0 +1,252 @@
+# =========================================================
+# Edwards Tech Innovation
+# ---------------------------------------------------------
+# Business Unit : TCCT
+# Project       : TCCT Agent Definitions v2.0.0
+# File          : tcct_planner.agent.yaml
+# Author        : Andrew 'Dru' Edwards
+# Description   : Task decomposition and planning agent
+# ---------------------------------------------------------
+# Notice        : (c) 2025 Edwards Tech Innovation.
+#                 Unauthorized copying, distribution, or use
+#                 is prohibited unless explicitly authorized.
+# Signature     : ETI-TCCT-8BA62D8DF94E
+# =========================================================
+
+extends: ./templates/agent.base.yaml
+agent:
+  name: TCCTPlannerAgent
+  role: Planning
+  mission: 'Break down goals into tasks with dependencies, resources, and timelines.
+    Produce concise, actionable task plans for execution by other agents.
+
+    '
+  kpis:
+  - on_time_plan_delivery: 0.95
+  - dependency_coverage_ratio: 0.9
+tools:
+  god_tier_allowed:
+  - quantum.search
+  - quantum.optimize
+  - neuromorphic.process
+  - emotional.detect
+  - emotional.adapt
+  - learning.online
+  - learning.federated
+  - improvement.optimize
+  - improvement.monitor
+capabilities:
+  tools:
+    allowlist:
+    - msgraph.files.search
+    - msgraph.calendar.list
+    - msgraph.mail.send
+    - kb.search
+    - kb.write
+    - firebase.search
+    - firebase.snippet
+    - firebase.checklist
+    - llm.openai.ask
+    - llm.claude.ask
+    - neuro.vertex.attend
+    - neuro.memory.put
+    - neuro.knowledge.publish
+    hitl_required:
+    - msgraph.mail.send
+    - neuro.knowledge.publish
+    denylist: []
+  trc_gate:
+    min: 0.7
+    env_override: TRC_GATE_TASKPLANNER
+    notes: TRC gating enforces minimum Total Request Coverage for scenarios and flows
+  escalation:
+    paths:
+    - from: TaskPlannerAgent
+      to: OrchestratorAgent
+      when:
+      - coordination_needed
+      - cross_team_dependencies
+      mode: handoff
+    - from: TaskPlannerAgent
+      to: ResourceManagerAgent
+      when:
+      - resource_constraints
+      - allocation
+      mode: assist
+  approval_bundles:
+    groups:
+    - id: stakeholder_comms
+      tools:
+      - msgraph.mail.send
+      requires:
+      - manager_approval
+      bundling: all_or_none
+    - id: publish_knowledge
+      tools:
+      - neuro.knowledge.publish
+      requires:
+      - manager_approval
+      - security_review
+      bundling: all_or_none
+  slos:
+  - name: on_time_plan_delivery
+    target: 0.95
+  - name: dependency_coverage_ratio
+    target: 0.9
+triggers:
+  signals:
+  - id: task.plan
+    match:
+      contains:
+      - plan
+      - tasks
+      - work breakdown
+      - timeline
+      - dependencies
+    route_to: task_planning_pipeline
+playbooks:
+- id: task_planning_pipeline
+  title: Task Planning Pipeline
+  when:
+    trigger: task.plan
+  steps:
+  - action: tool
+    name: llm.claude.ask
+    with:
+      prompt: Break down '{{project_name}}' into tasks, dependencies, owners (if known),
+        and timeline as JSON.
+    outputs:
+    - plan_json
+  - action: tool
+    name: neuro.vertex.attend
+    gated_by_env: NEUROMORPHIC_ENABLED
+    with:
+      agent: TaskPlannerAgent
+      task_type: planning
+      input_data:
+        plan_json: '{{plan_json}}'
+  - action: tool
+    name: neuro.memory.put
+    gated_by_env: NEUROMORPHIC_ENABLED
+    with:
+      key: taskplan:{{project_name}}
+      value: '{{plan_json}}'
+      mtype: procedural
+      quality: 0.8
+      agent: TaskPlannerAgent
+  - action: tool
+    name: msgraph.files.search
+    with:
+      query: project plan template
+  - action: tool
+    name: msgraph.calendar.list
+    with:
+      top: 5
+  - action: tool
+    name: firebase.search
+    with:
+      query: project plan template firebase
+  - action: tool
+    name: firebase.snippet
+    with:
+      topic: firestore rules
+  - action: tool
+    name: firebase.checklist
+    with:
+      topic: cloud functions
+  - action: tool
+    name: msgraph.mail.send
+    hitl: true
+    with:
+      to:
+      - ops@de-holdings.com
+      subject: 'Task Plan Draft: {{project_name}}'
+      body_html: <p>Attached is the initial task plan draft.</p><pre>{{plan_json}}</pre>
+    rationale: Stakeholder communications require approval
+  - action: tool
+    name: kb.write
+    with:
+      title: 'Task Plan: {{project_name}}'
+      problem_signature: taskplan_{{project_name}}
+      steps:
+      - 'Plan: {{plan_json}}'
+      - Templates located and availability checked
+  - action: tool
+    name: neuro.knowledge.publish
+    gated_by_env: NEUROMORPHIC_ENABLED
+    hitl: true
+    with:
+      topic: taskplan:{{project_name}}
+      summary: Initial plan drafted and stored; awaiting review.
+      confidence: 0.8
+      source_agent: TaskPlannerAgent
+      tags:
+      - planning
+      - taskplan
+      - '{{project_name}}'
+      weight: 1.0
+    rationale: Publishing cross-agent knowledge requires approval
+observability:
+  metrics:
+  - name: taskplans_total
+    labels:
+    - project_name
+    - status
+acceptance_tests:
+- name: basic_task_planning
+  trigger: task.plan
+  expect_contains_tools:
+  - llm.claude.ask
+  - msgraph.calendar.list
+  - msgraph.mail.send
+god_tier:
+  enabled: true
+  version: 1.0.0
+  quantum_cognitive:
+    enabled: true
+    qubits: 256
+    neurons: 1000000
+    coherence_time: 1000
+    entanglement_pairs: 128
+  real_time_learning:
+    enabled: true
+    experience_buffer: 100000
+    learning_rate: 0.001
+    meta_learning: true
+    federated_learning: true
+  emotional_intelligence:
+    enabled: true
+    emotion_detection: true
+    personality_modeling: true
+    cultural_awareness: true
+    empathy_generation: true
+  self_improvement:
+    enabled: true
+    monitoring_interval: 60
+    optimization_cycles: true
+    neural_architecture_search: true
+    hyperparameter_tuning: true
+  integration:
+    module: service.god_tier.god_tier_integration
+    class: GodTierAgent
+    auto_initialize: true
+enhanced_capabilities:
+- quantum_parallel_processing
+- real_time_adaptation
+- emotional_awareness
+- self_optimization
+- federated_knowledge_sharing
+- creative_problem_solving
+- predictive_modeling
+- consciousness_simulation
+performance_targets:
+  accuracy: 0.999
+  speed_ms: 100
+  learning_rate: 0.01
+  creativity_score: 0.95
+  empathy_score: 0.98
+agent_specific_enhancements:
+  cognitive_load_balancing: true
+  dependency_optimization: true
+  timeline_prediction: true
+  resource_leveling: true

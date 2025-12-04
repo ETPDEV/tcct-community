@@ -1,0 +1,5 @@
+# TCCT Community Edition - Requirements
+# (c) 2025 Edwards Tech Innovation
+
+# Core dependencies (minimal)
+pyyaml>=6.0

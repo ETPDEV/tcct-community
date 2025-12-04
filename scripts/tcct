@@ -1,0 +1,765 @@
+#!/bin/bash
+# =========================================================
+# Edwards Tech Innovation
+# ---------------------------------------------------------
+# Business Unit : TCCT
+# Project       : TCCT CLI v1.0.0
+# File          : tcct
+# Author        : Andrew 'Dru' Edwards
+# Description   : Main TCCT command-line interface entry point
+# ---------------------------------------------------------
+# Notice        : (c) 2025 Edwards Tech Innovation.
+#                 Unauthorized copying, distribution, or use
+#                 is prohibited unless explicitly authorized.
+# Signature     : ETI-TCCT-715046FDE226
+# =========================================================
+
+# TCCT - Termux Claude Code Toolkit
+# Unified CLI for hybrid local/cloud AI
+
+TCCT_DIR="$HOME/tcct"
+AGENTS_DIR="$HOME/agents"
+MODELS_DIR="$HOME/models"
+CONFIG_DIR="$TCCT_DIR/config"
+LOG_FILE="$HOME/.tcct.log"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+# Icons
+ICON_LOCAL="🏠"
+ICON_CLOUD="☁️"
+ICON_AGENT="🤖"
+ICON_VOICE="🎤"
+
+show_help() {
+    echo -e "${CYAN}TCCT - Termux Claude Code Toolkit${NC}"
+    echo -e "${YELLOW}Transform your phone into an AI development workstation${NC}"
+    echo ""
+    echo -e "${GREEN}SMART ROUTING (auto local/cloud):${NC}"
+    echo "  tcct ask \"query\"           Smart route to best model"
+    echo "  tcct ask --quality \"query\" Prefer quality (Sonnet/Opus)"
+    echo "  tcct ask --speed \"query\"   Prefer speed (Haiku/Local)"
+    echo ""
+    echo -e "${GREEN}FORCE MODEL:${NC}"
+    echo "  tcct local \"query\"         Force local (Qwen2.5-3B, free)"
+    echo "  tcct cloud \"query\"         Force cloud (Claude Sonnet)"
+    echo "  tcct haiku \"query\"         Force Haiku (cheap, fast)"
+    echo "  tcct opus \"query\"          Force Opus (best quality)"
+    echo ""
+    echo -e "${GREEN}AGENTS:${NC}"
+    echo "  tcct agent list            List all 25 agents"
+    echo "  tcct agent invoke <name> \"msg\"  Quick invoke"
+    echo "  tcct agent run <name> \"task\"    Agentic mode (tools)"
+    echo ""
+    echo -e "${GREEN}ANALYSIS:${NC}"
+    echo "  tcct analyze \"query\"       Show routing decision"
+    echo "  tcct cost \"query\"          Estimate API cost"
+    echo "  tcct status                System status"
+    echo ""
+    echo -e "${GREEN}VOICE (coming soon):${NC}"
+    echo "  tcct voice                 Voice mode (speak + listen)"
+    echo "  tcct speak \"text\"          Text-to-speech"
+    echo ""
+    echo -e "${GREEN}HARDWARE:${NC}"
+    echo "  tcct hw serial             USB serial (Arduino/ESP32)"
+    echo "  tcct hw bluetooth          Bluetooth device control"
+    echo "  tcct hw mqtt               MQTT smart home"
+    echo ""
+    echo -e "${GREEN}CONFIG:${NC}"
+    echo "  tcct config                Show configuration"
+    echo "  tcct config set <key> <val> Set config value"
+    echo ""
+    echo "Examples:"
+    echo "  tcct ask \"What is Python?\"                    # Routes to local"
+    echo "  tcct ask \"Debug my complex multi-file error\"  # Routes to cloud"
+    echo "  tcct agent run ops \"Audit my project files\"   # Agentic mode"
+    echo ""
+    echo -e "${BLUE}Docs: ~/tcct/ROADMAP.md${NC}"
+}
+
+# Check if agents service is running
+check_agents_service() {
+    curl -s --max-time 2 "http://localhost:8080/health" > /dev/null 2>&1
+    return $?
+}
+
+# Start agents service if needed
+ensure_agents_running() {
+    if ! check_agents_service; then
+        echo -e "${YELLOW}Starting agents service...${NC}"
+        cd "$AGENTS_DIR" && nohup python mobile_service.py > "$LOG_FILE" 2>&1 &
+        sleep 3
+        if check_agents_service; then
+            echo -e "${GREEN}Agents service started${NC}"
+        else
+            echo -e "${RED}Failed to start agents service${NC}"
+            return 1
+        fi
+    fi
+}
+
+# Smart ask - routes via hybrid router
+cmd_ask() {
+    local quality_flag=""
+    local speed_flag=""
+    local query=""
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --quality|-q)
+                quality_flag="--quality"
+                shift
+                ;;
+            --speed|-s)
+                speed_flag="--speed"
+                shift
+                ;;
+            *)
+                query="$*"
+                break
+                ;;
+        esac
+    done
+
+    if [[ -z "$query" ]]; then
+        echo "Usage: tcct ask [--quality|--speed] \"your query\""
+        return 1
+    fi
+
+    cd "$TCCT_DIR/core"
+    python router.py $quality_flag $speed_flag "$query"
+}
+
+# Force local model
+cmd_local() {
+    if [[ -z "$1" ]]; then
+        echo "Usage: tcct local \"your query\""
+        return 1
+    fi
+
+    cd "$TCCT_DIR/core"
+    python router.py --local "$*"
+}
+
+# Force cloud model (Sonnet)
+cmd_cloud() {
+    if [[ -z "$1" ]]; then
+        echo "Usage: tcct cloud \"your query\""
+        return 1
+    fi
+
+    cd "$TCCT_DIR/core"
+    python router.py --cloud "$*"
+}
+
+# Force Haiku
+cmd_haiku() {
+    if [[ -z "$1" ]]; then
+        echo "Usage: tcct haiku \"your query\""
+        return 1
+    fi
+
+    cd "$TCCT_DIR/core"
+    python router.py --cloud --speed "$*"
+}
+
+# Force Opus
+cmd_opus() {
+    if [[ -z "$1" ]]; then
+        echo "Usage: tcct opus \"your query\""
+        return 1
+    fi
+
+    cd "$TCCT_DIR/core"
+    python router.py --cloud --quality "$*"
+}
+
+# Analyze query routing
+cmd_analyze() {
+    if [[ -z "$1" ]]; then
+        echo "Usage: tcct analyze \"your query\""
+        return 1
+    fi
+
+    echo -e "${CYAN}Routing Analysis:${NC}"
+    cd "$TCCT_DIR/core"
+    python router.py --analyze "$*"
+}
+
+# Estimate cost
+cmd_cost() {
+    if [[ -z "$1" ]]; then
+        echo "Usage: tcct cost \"your query\""
+        return 1
+    fi
+
+    cd "$TCCT_DIR/core"
+    python -c "
+import sys
+sys.path.insert(0, '.')
+from router import HybridRouter
+
+router = HybridRouter()
+query = '''$*'''
+
+tokens = router.estimate_tokens(query)
+print(f'Estimated tokens: {tokens}')
+print()
+print('Estimated costs by model:')
+print(f'  LOCAL (Qwen2.5-3B): \$0.0000')
+print(f'  HAIKU:              \${router.estimate_cost(router.models[\"haiku\"], tokens):.4f}' if 'haiku' in str(router.models) else '')
+
+from router import ModelTier
+print(f'  HAIKU:              \${router.estimate_cost(ModelTier.HAIKU, tokens):.4f}')
+print(f'  SONNET:             \${router.estimate_cost(ModelTier.SONNET, tokens):.4f}')
+print(f'  OPUS:               \${router.estimate_cost(ModelTier.OPUS, tokens):.4f}')
+"
+}
+
+# System status
+cmd_status() {
+    echo -e "${CYAN}TCCT System Status${NC}"
+    echo "===================="
+    echo ""
+
+    # Check local model
+    if [[ -f "$MODELS_DIR/Qwen2.5-3B-Instruct-Q4_K_M.gguf" ]]; then
+        echo -e "${GREEN}✓${NC} Local model: Qwen2.5-3B available"
+    else
+        echo -e "${RED}✗${NC} Local model: Not found"
+    fi
+
+    # Check llama.cpp
+    if [[ -f "$HOME/llama.cpp/build/bin/llama-cli" ]]; then
+        echo -e "${GREEN}✓${NC} llama.cpp: Installed"
+    else
+        echo -e "${RED}✗${NC} llama.cpp: Not found"
+    fi
+
+    # Check API key
+    if [[ -n "$ANTHROPIC_API_KEY" ]]; then
+        echo -e "${GREEN}✓${NC} Anthropic API: Configured"
+    else
+        echo -e "${YELLOW}○${NC} Anthropic API: Not configured (cloud unavailable)"
+    fi
+
+    # Check agents service
+    if check_agents_service; then
+        echo -e "${GREEN}✓${NC} Agents service: Running on :8080"
+        local agent_count=$(curl -s "http://localhost:8080/agents" | python -c "import sys,json; print(len(json.load(sys.stdin).get('agents', [])))" 2>/dev/null)
+        echo "    ${agent_count:-0} agents available"
+    else
+        echo -e "${YELLOW}○${NC} Agents service: Not running"
+    fi
+
+    # Check agentic engine
+    local agentic_status=$(curl -s "http://localhost:8080/agentic/status" 2>/dev/null)
+    if [[ -n "$agentic_status" ]] && echo "$agentic_status" | grep -q '"agentic_available": true'; then
+        echo -e "${GREEN}✓${NC} Agentic engine: Ready"
+    else
+        echo -e "${YELLOW}○${NC} Agentic engine: Not loaded"
+    fi
+
+    # Battery
+    local battery=$(termux-battery-status 2>/dev/null | python -c "import sys,json; b=json.load(sys.stdin); print(f\"{b['percentage']}% ({b['status']})\")" 2>/dev/null)
+    if [[ -n "$battery" ]]; then
+        echo ""
+        echo "Battery: $battery"
+    fi
+
+    # Connectivity
+    if ping -c 1 -W 2 api.anthropic.com > /dev/null 2>&1; then
+        echo -e "Network: ${GREEN}Online${NC}"
+    else
+        echo -e "Network: ${YELLOW}Offline${NC}"
+    fi
+}
+
+# Agent commands
+cmd_agent() {
+    local subcmd="${1:-list}"
+    shift
+
+    ensure_agents_running || return 1
+
+    case "$subcmd" in
+        list)
+            echo -e "${CYAN}Available Agents (25):${NC}"
+            curl -s "http://localhost:8080/agents" | python -c "
+import sys, json
+data = json.load(sys.stdin)
+agents = data.get('agents', [])
+# Display in columns
+for i in range(0, len(agents), 3):
+    row = agents[i:i+3]
+    print('  ' + '  '.join(f'{a:<20}' for a in row))
+"
+            ;;
+
+        invoke)
+            local agent_name="$1"
+            shift
+            local message="$*"
+
+            if [[ -z "$agent_name" ]] || [[ -z "$message" ]]; then
+                echo "Usage: tcct agent invoke <agent_name> \"message\""
+                return 1
+            fi
+
+            echo -e "${ICON_AGENT} Invoking ${agent_name}..."
+            curl -s -X POST "http://localhost:8080/agent/invoke" \
+                -H "Content-Type: application/json" \
+                -d "{\"agent\": \"$agent_name\", \"message\": \"$message\", \"use_local\": true}" | python -c "
+import sys, json
+data = json.load(sys.stdin)
+if 'response' in data:
+    print(data['response'])
+else:
+    print(data)
+"
+            ;;
+
+        run)
+            local agent_name="$1"
+            shift
+            local task="$*"
+
+            if [[ -z "$agent_name" ]] || [[ -z "$task" ]]; then
+                echo "Usage: tcct agent run <agent_name> \"task description\""
+                return 1
+            fi
+
+            echo -e "${ICON_AGENT} Running ${agent_name} in AGENTIC mode..."
+            echo "Task: $task"
+            echo ""
+
+            curl -s --max-time 900 -X POST "http://localhost:8080/agent/run" \
+                -H "Content-Type: application/json" \
+                -d "{\"agent\": \"$agent_name\", \"task\": \"$task\", \"permission_level\": \"standard\", \"use_local\": true}" | python -m json.tool
+            ;;
+
+        tools)
+            echo -e "${CYAN}Available Tools:${NC}"
+            curl -s "http://localhost:8080/agent/tools" | python -c "
+import sys, json
+data = json.load(sys.stdin)
+for name, info in data.get('tools', {}).items():
+    danger = ' [DANGEROUS]' if info.get('dangerous') else ''
+    print(f'  {name}{danger}: {info[\"description\"]}')
+"
+            ;;
+
+        memory)
+            echo -e "${CYAN}Agent Memory:${NC}"
+            curl -s "http://localhost:8080/agent/memory" | python -m json.tool
+            ;;
+
+        *)
+            echo "Unknown agent command: $subcmd"
+            echo "Available: list, invoke, run, tools, memory"
+            return 1
+            ;;
+    esac
+}
+
+# Voice commands
+cmd_voice() {
+    shift_args="$@"
+    if [[ -x "$HOME/bin/tcct-voice" ]]; then
+        exec "$HOME/bin/tcct-voice" $shift_args
+    else
+        echo -e "${ICON_VOICE} Voice mode not installed!"
+        echo ""
+        echo "To install:"
+        echo "  1. Install Termux:API app from F-Droid"
+        echo "  2. Run: pkg install termux-api"
+        echo ""
+        echo "Usage:"
+        echo "  tcct voice              # One-shot voice command"
+        echo "  tcct voice --continuous # Keep listening"
+        echo "  tcct voice --wake       # Wait for 'Hey Alice'"
+        echo "  tcct voice --status     # Check voice status"
+    fi
+}
+
+# Text-to-speech
+cmd_speak() {
+    if [[ -z "$1" ]]; then
+        echo "Usage: tcct speak \"text to speak\""
+        return 1
+    fi
+
+    if command -v alice-speak &> /dev/null; then
+        alice-speak "$*"
+    else
+        echo "alice-speak not found. Install with: pip install gtts"
+    fi
+}
+
+# Vision commands
+cmd_vision() {
+    local subcmd="${1:-help}"
+    shift
+
+    case "$subcmd" in
+        capture|photo)
+            local camera="--back"
+            [[ "$1" == "--front" ]] && camera="--front"
+            cd "$TCCT_DIR/modules/vision"
+            python capture.py $camera
+            ;;
+
+        describe)
+            if [[ -z "$1" ]]; then
+                echo "Usage: tcct vision describe <image_path> [--code|--ui|--diagram|--ocr]"
+                return 1
+            fi
+            cd "$TCCT_DIR/modules/vision"
+            python describe.py "$@"
+            ;;
+
+        code)
+            if [[ -z "$1" ]]; then
+                echo "Usage: tcct vision code <screenshot_path>"
+                return 1
+            fi
+            cd "$TCCT_DIR/modules/vision"
+            python describe.py "$1" --code
+            ;;
+
+        ocr)
+            if [[ -z "$1" ]]; then
+                echo "Usage: tcct vision ocr <image_path>"
+                return 1
+            fi
+            cd "$TCCT_DIR/modules/vision"
+            python describe.py "$1" --ocr
+            ;;
+
+        list)
+            cd "$TCCT_DIR/modules/vision"
+            python capture.py --list
+            ;;
+
+        help|*)
+            echo -e "${CYAN}TCCT Vision (Multi-Modal)${NC}"
+            echo ""
+            echo "Commands:"
+            echo "  tcct vision capture [--front]  Capture photo from camera"
+            echo "  tcct vision describe <path>    Describe image"
+            echo "  tcct vision code <path>        Analyze code screenshot"
+            echo "  tcct vision ocr <path>         Extract text from image"
+            echo "  tcct vision list               List captured images"
+            echo ""
+            echo "Analysis modes:"
+            echo "  tcct vision describe <path> --code     Code/screenshot"
+            echo "  tcct vision describe <path> --ui       UI mockup"
+            echo "  tcct vision describe <path> --diagram  Flowchart/diagram"
+            echo "  tcct vision describe <path> --ocr      Text extraction"
+            echo ""
+            echo "Examples:"
+            echo "  tcct vision capture                    # Take photo"
+            echo "  tcct vision code ~/screenshot.png      # Analyze code"
+            echo "  tcct vision describe ~/diagram.jpg --diagram"
+            ;;
+    esac
+}
+
+# Memory commands
+cmd_memory() {
+    local subcmd="${1:-help}"
+    shift
+
+    case "$subcmd" in
+        store|remember)
+            if [[ -z "$1" ]]; then
+                echo "Usage: tcct memory store \"content\" [--type fact|preference|skill]"
+                return 1
+            fi
+            local content="$1"
+            local mem_type="${2:---type}"
+            local type_val="${3:-fact}"
+            cd "$TCCT_DIR/core"
+            python memory.py store "$content" --type "$type_val"
+            ;;
+
+        recall|search)
+            if [[ -z "$1" ]]; then
+                echo "Usage: tcct memory recall \"query\""
+                return 1
+            fi
+            cd "$TCCT_DIR/core"
+            python memory.py recall "$*"
+            ;;
+
+        list)
+            cd "$TCCT_DIR/core"
+            python memory.py list "$@"
+            ;;
+
+        stats)
+            cd "$TCCT_DIR/core"
+            python memory.py stats
+            ;;
+
+        context)
+            cd "$TCCT_DIR/core"
+            python memory.py context show
+            ;;
+
+        help|*)
+            echo -e "${CYAN}TCCT Memory System${NC}"
+            echo ""
+            echo "Commands:"
+            echo "  tcct memory store \"content\"   Store a fact/knowledge"
+            echo "  tcct memory recall \"query\"    Search memories"
+            echo "  tcct memory list               List all memories"
+            echo "  tcct memory stats              Show statistics"
+            echo "  tcct memory context            Show current context"
+            echo ""
+            echo "Examples:"
+            echo "  tcct memory store \"Python uses indentation for blocks\""
+            echo "  tcct memory recall \"python syntax\""
+            ;;
+    esac
+}
+
+# Hardware commands
+cmd_hw() {
+    local subcmd="${1:-help}"
+    shift
+
+    case "$subcmd" in
+        serial|usb)
+            local action="${1:-list}"
+            shift
+            cd "$TCCT_DIR/modules/hardware"
+            case "$action" in
+                list)
+                    python serial.py --list
+                    ;;
+                send)
+                    if [[ -z "$1" ]]; then
+                        echo "Usage: tcct hw serial send \"data\" [--device /dev/ttyUSB0]"
+                        return 1
+                    fi
+                    python serial.py --send "$@"
+                    ;;
+                monitor)
+                    python serial.py --monitor "$@"
+                    ;;
+                arduino)
+                    python serial.py --arduino "$@"
+                    ;;
+                esp32)
+                    python serial.py --esp32 "$@"
+                    ;;
+                *)
+                    echo "Usage: tcct hw serial <command>"
+                    echo ""
+                    echo "Commands:"
+                    echo "  list                 List available serial devices"
+                    echo "  send \"data\"          Send data to device"
+                    echo "  monitor              Monitor incoming data"
+                    echo "  arduino              Use Arduino interface"
+                    echo "  esp32                Use ESP32 interface"
+                    echo ""
+                    echo "Options:"
+                    echo "  --device /dev/ttyUSB0   Specify device"
+                    echo "  --baud 115200           Set baud rate"
+                    ;;
+            esac
+            ;;
+
+        bluetooth|bt)
+            local action="${1:-help}"
+            shift
+            cd "$TCCT_DIR/modules/hardware"
+            case "$action" in
+                scan)
+                    local duration="${1:-10}"
+                    python bluetooth.py --scan "$duration"
+                    ;;
+                paired)
+                    python bluetooth.py --paired
+                    ;;
+                pair)
+                    if [[ -z "$1" ]]; then
+                        echo "Usage: tcct hw bt pair <MAC_ADDRESS>"
+                        return 1
+                    fi
+                    python bluetooth.py --pair "$1"
+                    ;;
+                connect)
+                    if [[ -z "$1" ]]; then
+                        echo "Usage: tcct hw bt connect <MAC_ADDRESS>"
+                        return 1
+                    fi
+                    python bluetooth.py --connect "$1"
+                    ;;
+                disconnect)
+                    python bluetooth.py --disconnect "$1"
+                    ;;
+                *)
+                    echo "Usage: tcct hw bluetooth <command>"
+                    echo ""
+                    echo "Commands:"
+                    echo "  scan [duration]       Scan for devices (default 10s)"
+                    echo "  paired                List paired devices"
+                    echo "  pair <MAC>            Pair with device"
+                    echo "  connect <MAC>         Connect to device"
+                    echo "  disconnect <MAC>      Disconnect from device"
+                    echo ""
+                    echo "Note: Requires Termux:API from F-Droid"
+                    ;;
+            esac
+            ;;
+
+        mqtt|home)
+            local action="${1:-help}"
+            shift
+            cd "$TCCT_DIR/modules/hardware"
+            case "$action" in
+                pub|publish)
+                    if [[ -z "$1" ]] || [[ -z "$2" ]]; then
+                        echo "Usage: tcct hw mqtt pub <topic> \"message\""
+                        return 1
+                    fi
+                    python mqtt.py --pub "$1" "$2"
+                    ;;
+                sub|subscribe)
+                    if [[ -z "$1" ]]; then
+                        echo "Usage: tcct hw mqtt sub <topic> [--timeout 60]"
+                        return 1
+                    fi
+                    python mqtt.py --sub "$@"
+                    ;;
+                light)
+                    if [[ -z "$1" ]] || [[ -z "$2" ]]; then
+                        echo "Usage: tcct hw mqtt light <device> on|off"
+                        return 1
+                    fi
+                    python mqtt.py --light "$1" "$2"
+                    ;;
+                switch)
+                    if [[ -z "$1" ]] || [[ -z "$2" ]]; then
+                        echo "Usage: tcct hw mqtt switch <device> on|off"
+                        return 1
+                    fi
+                    python mqtt.py --switch "$1" "$2"
+                    ;;
+                config)
+                    if [[ -z "$1" ]]; then
+                        echo "Usage: tcct hw mqtt config <host> [--user USER] [--password PASS]"
+                        return 1
+                    fi
+                    python mqtt.py --host "$@" --config
+                    ;;
+                *)
+                    echo "Usage: tcct hw mqtt <command>"
+                    echo ""
+                    echo "Commands:"
+                    echo "  config <host>         Configure MQTT broker"
+                    echo "  pub <topic> \"msg\"     Publish message"
+                    echo "  sub <topic>           Subscribe to topic"
+                    echo "  light <dev> on|off    Control smart light"
+                    echo "  switch <dev> on|off   Control smart switch"
+                    echo ""
+                    echo "Examples:"
+                    echo "  tcct hw mqtt config broker.local"
+                    echo "  tcct hw mqtt pub home/lights/office ON"
+                    echo "  tcct hw mqtt light office on"
+                    ;;
+            esac
+            ;;
+
+        help|*)
+            echo -e "${CYAN}TCCT Hardware Bridge${NC}"
+            echo ""
+            echo "Subsystems:"
+            echo "  tcct hw serial      USB serial communication (Arduino/ESP32)"
+            echo "  tcct hw bluetooth   Bluetooth device control"
+            echo "  tcct hw mqtt        MQTT smart home integration"
+            echo ""
+            echo "Quick Examples:"
+            echo "  tcct hw serial list              # List USB devices"
+            echo "  tcct hw serial monitor           # Monitor serial data"
+            echo "  tcct hw bt scan                  # Scan Bluetooth devices"
+            echo "  tcct hw mqtt light office on     # Turn on light"
+            echo ""
+            echo "Requirements:"
+            echo "  Serial:    USB OTG adapter + Arduino/ESP32"
+            echo "  Bluetooth: Termux:API (F-Droid version)"
+            echo "  MQTT:      pip install paho-mqtt OR pkg install mosquitto"
+            ;;
+    esac
+}
+
+# Config commands
+cmd_config() {
+    local subcmd="${1:-show}"
+    shift
+
+    local config_file="$CONFIG_DIR/preferences.yaml"
+
+    case "$subcmd" in
+        show)
+            echo -e "${CYAN}TCCT Configuration:${NC}"
+            if [[ -f "$config_file" ]]; then
+                cat "$config_file"
+            else
+                echo "No configuration file found."
+                echo "Using defaults."
+            fi
+            ;;
+
+        set)
+            local key="$1"
+            local value="$2"
+            if [[ -z "$key" ]] || [[ -z "$value" ]]; then
+                echo "Usage: tcct config set <key> <value>"
+                return 1
+            fi
+            mkdir -p "$CONFIG_DIR"
+            echo "$key: $value" >> "$config_file"
+            echo "Set $key = $value"
+            ;;
+
+        *)
+            echo "Unknown config command: $subcmd"
+            return 1
+            ;;
+    esac
+}
+
+# Main command router
+case "${1:-help}" in
+    ask)       shift; cmd_ask "$@" ;;
+    local)     shift; cmd_local "$@" ;;
+    cloud)     shift; cmd_cloud "$@" ;;
+    haiku)     shift; cmd_haiku "$@" ;;
+    opus)      shift; cmd_opus "$@" ;;
+    analyze)   shift; cmd_analyze "$@" ;;
+    cost)      shift; cmd_cost "$@" ;;
+    status)    cmd_status ;;
+    agent)     shift; cmd_agent "$@" ;;
+    voice)     cmd_voice ;;
+    speak)     shift; cmd_speak "$@" ;;
+    config)    shift; cmd_config "$@" ;;
+    memory)    shift; cmd_memory "$@" ;;
+    vision)    shift; cmd_vision "$@" ;;
+    hw|hardware) shift; cmd_hw "$@" ;;
+    help|--help|-h)
+        show_help ;;
+    *)
+        echo "Unknown command: $1"
+        echo "Run 'tcct help' for usage"
+        exit 1
+        ;;
+esac

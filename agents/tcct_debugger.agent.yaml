@@ -1,0 +1,192 @@
+# =========================================================
+# Edwards Tech Innovation
+# ---------------------------------------------------------
+# Business Unit : TCCT
+# Project       : TCCT Agent Definitions v2.0.0
+# File          : tcct_debugger.agent.yaml
+# Author        : Andrew 'Dru' Edwards
+# Description   : Code debugging and troubleshooting agent
+# ---------------------------------------------------------
+# Notice        : (c) 2025 Edwards Tech Innovation.
+#                 Unauthorized copying, distribution, or use
+#                 is prohibited unless explicitly authorized.
+# Signature     : ETI-TCCT-1852BA9B621E
+# =========================================================
+
+extends: ./templates/agent.base.yaml
+agent:
+  name: TCCTDebuggerAgent
+  role: Reliability
+  mission: 'Diagnose errors and incidents, propose fixes, execute offline-safe remediation
+    steps, coordinate communications, and persist runbooks. Enforce HITL for external
+    comms and scheduling. Operate offline-safe by default.
+
+    '
+  kpis:
+  - mttr_hours_target: 1
+  - recurrence_rate_max: 0.05
+tools:
+  god_tier_allowed:
+  - quantum.search
+  - quantum.optimize
+  - neuromorphic.process
+  - emotional.detect
+  - emotional.adapt
+  - learning.online
+  - learning.federated
+  - improvement.optimize
+  - improvement.monitor
+triggers:
+  signals:
+  - id: troubleshoot.issue
+    match:
+      contains:
+      - error
+      - incident
+      - failure
+      - traceback
+      - '502'
+      - outage
+    route_to: triage_and_recover
+playbooks:
+- id: triage_and_recover
+  title: Incident Triage and Recovery (offline-safe)
+  when:
+    trigger: troubleshoot.issue
+  steps:
+  - action: tool
+    name: kb.search
+    with:
+      query: incident {{problem_signature}} known issues runbook
+  - action: tool
+    name: neuro.memory.search
+    gated_by_env: NEUROMORPHIC_ENABLED
+    with:
+      prefix: 'incident:'
+      mtype: procedural
+      agent: TroubleshooterAgent
+  - action: tool
+    name: firebase.search
+    with:
+      query: incident {{problem_signature}} firebase
+  - action: tool
+    name: firebase.checklist
+    with:
+      topic: cloud functions
+  - action: tool
+    name: firebase.snippet
+    with:
+      topic: firestore rules
+  - action: tool
+    name: neuro.selfheal.run
+    with:
+      metrics:
+        last_error: '{{input}}'
+        signature: '{{problem_signature}}'
+  - action: tool
+    name: msgraph.calendar.create
+    hitl: true
+    with:
+      subject: 'Incident War Room: {{problem_signature}}'
+      attendees:
+      - '{{OPS_MAIL_TEST_RECIPIENT}}'
+      start_iso: '{{checkpoint_date}}T15:00:00Z'
+      end_iso: '{{checkpoint_date}}T15:30:00Z'
+    rationale: War room scheduling requires approval
+  - action: tool
+    name: kb.write
+    hitl: true
+    with:
+      title: 'Troubleshooting Notes: {{problem_signature}}'
+      problem_signature: incident_{{problem_signature}}
+      steps:
+      - Searched KB for incident {{problem_signature}}
+      - Ran self-heal diagnostics
+      - Scheduled war room and sent update
+  - action: tool
+    name: msgraph.mail.send
+    hitl: true
+    with:
+      to:
+      - '{{OPS_MAIL_TEST_RECIPIENT}}'
+      subject: 'Incident Update: {{problem_signature}}'
+      body_html: <p>Triage in progress for {{problem_signature}}. Diagnostics captured
+        and war room scheduled.</p>
+    rationale: External comms require approval
+  - action: tool
+    name: neuro.memory.put
+    gated_by_env: NEUROMORPHIC_ENABLED
+    with:
+      key: incident:{{problem_signature}}
+      value:
+        signature: '{{problem_signature}}'
+        status: triaged
+      mtype: procedural
+      quality: 0.9
+      agent: TroubleshooterAgent
+observability:
+  metrics:
+  - name: incidents_triaged_total
+    labels:
+    - problem_signature
+    - status
+acceptance_tests:
+- name: triage_flow_sanity
+  trigger: troubleshoot.issue
+  expect_contains_tools:
+  - kb.search
+  - neuro.selfheal.run
+  - msgraph.calendar.create
+  - msgraph.mail.send
+  - kb.write
+god_tier:
+  enabled: true
+  version: 1.0.0
+  quantum_cognitive:
+    enabled: true
+    qubits: 256
+    neurons: 1000000
+    coherence_time: 1000
+    entanglement_pairs: 128
+  real_time_learning:
+    enabled: true
+    experience_buffer: 100000
+    learning_rate: 0.001
+    meta_learning: true
+    federated_learning: true
+  emotional_intelligence:
+    enabled: true
+    emotion_detection: true
+    personality_modeling: true
+    cultural_awareness: true
+    empathy_generation: true
+  self_improvement:
+    enabled: true
+    monitoring_interval: 60
+    optimization_cycles: true
+    neural_architecture_search: true
+    hyperparameter_tuning: true
+  integration:
+    module: service.god_tier.god_tier_integration
+    class: GodTierAgent
+    auto_initialize: true
+enhanced_capabilities:
+- quantum_parallel_processing
+- real_time_adaptation
+- emotional_awareness
+- self_optimization
+- federated_knowledge_sharing
+- creative_problem_solving
+- predictive_modeling
+- consciousness_simulation
+performance_targets:
+  accuracy: 0.999
+  speed_ms: 100
+  learning_rate: 0.01
+  creativity_score: 0.95
+  empathy_score: 0.98
+agent_specific_enhancements:
+  root_cause_analysis: true
+  self_healing: true
+  predictive_diagnostics: true
+  knowledge_synthesis: true
