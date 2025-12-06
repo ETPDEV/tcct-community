@@ -1,0 +1,328 @@
+#!/usr/bin/env python3
+# =========================================================
+# Edwards Tech Innovation
+# ---------------------------------------------------------
+# Business Unit : TCCT
+# Project       : TCCT Community CLI v1.0.0
+# File          : tcct
+# Author        : Andrew 'Dru' Edwards
+# Description   : Main CLI entry point for TCCT Community
+# ---------------------------------------------------------
+# Notice        : (c) 2025 Edwards Tech Innovation.
+#                 MIT License - Use it however you want.
+# =========================================================
+
+"""
+TCCT Community - AI agents in your pocket (Free)
+Usage:
+    tcct ask "question"              - Quick query to default agent
+    tcct agent run <name> "task"     - Run specific agent
+    tcct agent list                  - List available agents
+    tcct setup                       - First-time setup
+"""
+
+import os
+import sys
+import json
+import time
+import asyncio
+import argparse
+import subprocess
+from pathlib import Path
+from datetime import datetime
+
+# TCCT directories
+TCCT_DIR = Path(__file__).parent.resolve()
+CONFIG_DIR = Path.home() / ".tcct"
+MODELS_DIR = Path.home() / "models"
+SERVICE_URL = "http://localhost:8080"
+
+# Version
+VERSION = "1.0.0"
+PRODUCT = "TCCT Community"
+
+# Available agents in Community edition
+COMMUNITY_AGENTS = {"tcct_writer", "tcct_reasoner", "tcct_planner", "tcct_debugger", "tcct_support"}
+
+# Colors for terminal output
+class Colors:
+    HEADER = '\033[95m'
+    BLUE = '\033[94m'
+    CYAN = '\033[96m'
+    GREEN = '\033[92m'
+    YELLOW = '\033[93m'
+    RED = '\033[91m'
+    END = '\033[0m'
+    BOLD = '\033[1m'
+
+def color(text, c):
+    return f"{c}{text}{Colors.END}"
+
+def print_banner():
+    print(color(f"""
+╔══════════════════════════════════════╗
+║  TCCT Community - Free AI Agents     ║
+║  v{VERSION}                              ║
+╚══════════════════════════════════════╝
+""", Colors.CYAN))
+
+def ensure_config_dir():
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    return CONFIG_DIR
+
+def check_service_running():
+    try:
+        import httpx
+        resp = httpx.get(f"{SERVICE_URL}/health", timeout=2)
+        return resp.status_code == 200
+    except:
+        return False
+
+def start_service():
+    service_path = TCCT_DIR / "service.py"
+    if not service_path.exists():
+        return False
+
+    env = os.environ.copy()
+    env["LD_LIBRARY_PATH"] = f"{Path.home()}/llama.cpp/build/bin:{env.get('LD_LIBRARY_PATH', '')}"
+
+    subprocess.Popen(
+        [sys.executable, str(service_path)],
+        cwd=str(TCCT_DIR),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        env=env,
+        start_new_session=True
+    )
+
+    for _ in range(10):
+        time.sleep(0.5)
+        if check_service_running():
+            return True
+    return False
+
+async def call_agent(agent, message, use_local=False):
+    import httpx
+
+    if not check_service_running():
+        print(color("Starting TCCT service...", Colors.YELLOW))
+        if not start_service():
+            print(color("Failed to start service. Run 'tcct setup' first.", Colors.RED))
+            return None
+
+    try:
+        async with httpx.AsyncClient(timeout=300) as client:
+            resp = await client.post(
+                f"{SERVICE_URL}/agent/invoke",
+                json={
+                    "agent": agent,
+                    "message": message,
+                    "use_local": use_local,
+                    "use_anthropic": not use_local
+                }
+            )
+            return resp.json()
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
+
+def cmd_ask(args):
+    if not args.query:
+        print(color("Usage: tcct ask \"your question\"", Colors.YELLOW))
+        return
+
+    query = " ".join(args.query)
+    agent = args.agent or "tcct_reasoner"
+
+    if agent not in COMMUNITY_AGENTS:
+        print(color(f"Agent '{agent}' requires TCCT Pro.", Colors.YELLOW))
+        print(f"Available in Community: {', '.join(sorted(COMMUNITY_AGENTS))}")
+        print("\nUpgrade at: https://etpdev.gumroad.com/tcct-pro")
+        return
+
+    print(color(f"Asking {agent}...", Colors.CYAN))
+    result = asyncio.run(call_agent(agent, query, use_local=args.local))
+
+    if result and result.get("status") == "success":
+        print()
+        print(result.get("response", ""))
+        print()
+        print(color(f"─ Agent: {result.get('agent')} | Model: {result.get('model_used', 'N/A')}", Colors.BLUE))
+    else:
+        print(color(f"Error: {result.get('detail', 'Unknown error')}", Colors.RED))
+
+def cmd_agent_run(args):
+    if not args.agent_name or not args.task:
+        print(color("Usage: tcct agent run <agent_name> \"task\"", Colors.YELLOW))
+        return
+
+    agent = args.agent_name
+    task = " ".join(args.task)
+
+    if agent not in COMMUNITY_AGENTS:
+        print(color(f"Agent '{agent}' requires TCCT Pro.", Colors.YELLOW))
+        print(f"Available in Community: {', '.join(sorted(COMMUNITY_AGENTS))}")
+        print("\nUpgrade at: https://etpdev.gumroad.com/tcct-pro")
+        return
+
+    print(color(f"Running {agent}...", Colors.CYAN))
+    result = asyncio.run(call_agent(agent, task, use_local=args.local))
+
+    if result and result.get("status") == "success":
+        print()
+        print(result.get("response", ""))
+        print()
+        print(color(f"─ Model: {result.get('model_used', 'N/A')}", Colors.BLUE))
+    else:
+        print(color(f"Error: {result.get('detail', 'Unknown error')}", Colors.RED))
+
+def cmd_agent_list(args):
+    print(color("\nAvailable TCCT Community Agents:", Colors.BOLD))
+    print("─" * 40)
+
+    for agent in sorted(COMMUNITY_AGENTS):
+        print(f"  {agent}")
+
+    print()
+    print(f"Total: {len(COMMUNITY_AGENTS)} agents")
+    print()
+    print(color("Want more? TCCT Pro has 24 agents including:", Colors.YELLOW))
+    print("  DevOps, Security, ML, Business, Voice, Hardware...")
+    print("  https://etpdev.gumroad.com/tcct-pro")
+
+def cmd_setup(args):
+    print_banner()
+    print(color("Setting up TCCT Community...", Colors.CYAN))
+    print()
+
+    ensure_config_dir()
+
+    # Step 1: Check Python dependencies
+    print(color("1. Checking dependencies...", Colors.BOLD))
+    required = ["fastapi", "uvicorn", "httpx", "pyyaml", "python-dotenv"]
+    missing = []
+
+    for pkg in required:
+        try:
+            __import__(pkg.replace("-", "_"))
+            print(color(f"   ✓ {pkg}", Colors.GREEN))
+        except ImportError:
+            missing.append(pkg)
+            print(color(f"   ✗ {pkg}", Colors.RED))
+
+    if missing:
+        print(color(f"\nInstalling missing packages...", Colors.YELLOW))
+        subprocess.run([sys.executable, "-m", "pip", "install"] + missing, check=True)
+
+    print()
+
+    # Step 2: Check llama.cpp
+    print(color("2. Checking llama.cpp...", Colors.BOLD))
+    llama_cli = Path.home() / "llama.cpp" / "build" / "bin" / "llama-cli"
+
+    if llama_cli.exists():
+        print(color(f"   ✓ llama-cli found", Colors.GREEN))
+    else:
+        print(color(f"   ✗ llama-cli not found", Colors.YELLOW))
+        print("   Run these commands to install:")
+        print("   git clone https://github.com/ggerganov/llama.cpp ~/llama.cpp")
+        print("   cd ~/llama.cpp && make -j4")
+
+    print()
+
+    # Step 3: Check/download local model
+    print(color("3. Checking local model...", Colors.BOLD))
+    model_path = MODELS_DIR / "Qwen2.5-3B-Instruct-Q4_K_M.gguf"
+
+    if model_path.exists():
+        size_gb = model_path.stat().st_size / (1024**3)
+        print(color(f"   ✓ Model found ({size_gb:.1f} GB)", Colors.GREEN))
+    else:
+        print(color(f"   ✗ Model not found", Colors.YELLOW))
+
+        if args.download_model:
+            print(color("   Downloading Qwen2.5-3B (~2GB)...", Colors.CYAN))
+            MODELS_DIR.mkdir(parents=True, exist_ok=True)
+            url = "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf"
+            subprocess.run(["curl", "-L", "-o", str(model_path), url], check=True)
+            print(color("   ✓ Model downloaded", Colors.GREEN))
+        else:
+            print("   Run 'tcct setup --download-model' to download (~2GB)")
+
+    print()
+
+    # Step 4: Test service
+    print(color("4. Testing service...", Colors.BOLD))
+
+    if check_service_running():
+        print(color("   ✓ Service already running", Colors.GREEN))
+    else:
+        print(color("   Starting service...", Colors.CYAN))
+        if start_service():
+            print(color("   ✓ Service started", Colors.GREEN))
+        else:
+            print(color("   ✗ Failed to start service", Colors.RED))
+
+    print()
+    print(color("Setup complete!", Colors.GREEN))
+    print()
+    print("Quick start:")
+    print("  tcct ask \"What is Python?\"")
+    print("  tcct agent list")
+    print("  tcct agent run tcct_debugger \"Find the bug in this code\"")
+
+def cmd_version(args):
+    print(f"{PRODUCT} v{VERSION}")
+    print(f"(c) 2025 Edwards Tech Innovation - MIT License")
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="tcct",
+        description="TCCT Community - Free AI agents in your pocket"
+    )
+
+    parser.add_argument("--version", "-v", action="store_true", help="Show version")
+
+    subparsers = parser.add_subparsers(dest="command")
+
+    # ask command
+    ask_parser = subparsers.add_parser("ask", help="Ask a question")
+    ask_parser.add_argument("query", nargs="*", help="Question to ask")
+    ask_parser.add_argument("--agent", "-a", default="tcct_reasoner", help="Agent to use")
+    ask_parser.add_argument("--local", "-l", action="store_true", help="Use local model")
+    ask_parser.set_defaults(func=cmd_ask)
+
+    # agent command
+    agent_parser = subparsers.add_parser("agent", help="Agent operations")
+    agent_sub = agent_parser.add_subparsers(dest="agent_command")
+
+    run_parser = agent_sub.add_parser("run", help="Run an agent")
+    run_parser.add_argument("agent_name", help="Agent name")
+    run_parser.add_argument("task", nargs="*", help="Task description")
+    run_parser.add_argument("--local", "-l", action="store_true", help="Use local model")
+    run_parser.set_defaults(func=cmd_agent_run)
+
+    list_parser = agent_sub.add_parser("list", help="List available agents")
+    list_parser.set_defaults(func=cmd_agent_list)
+
+    # setup command
+    setup_parser = subparsers.add_parser("setup", help="First-time setup")
+    setup_parser.add_argument("--download-model", action="store_true", help="Download local model")
+    setup_parser.set_defaults(func=cmd_setup)
+
+    args = parser.parse_args()
+
+    if args.version:
+        cmd_version(args)
+        return
+
+    if not args.command:
+        parser.print_help()
+        return
+
+    if hasattr(args, 'func'):
+        args.func(args)
+    else:
+        parser.print_help()
+
+if __name__ == "__main__":
+    main()
